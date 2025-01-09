@@ -4,11 +4,15 @@ const fs = require('fs');
 const app = express();
 const userSchema = require('./userModel');
 const userSchema1 = require('./models/user');
+const cookieParser = require('cookie-parser');
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 app.set("view engine", "ejs");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
+app.use(cookieParser()) // use to read cookies on another routes
 
 app.get('/', function (req, res) {
     // res.send("Running");
@@ -132,6 +136,33 @@ app.post('/updateUser/:id', async function (req, res) {
     )
     res.redirect('/read');
 });
+
+app.get("/auth", function(req, res){
+    // res.cookie("name","samarth")
+    //Encryption
+    bcrypt.genSalt(10, function(err, salt){
+        bcrypt.hash("123", salt, function(err, hash){
+            console.log("hash:",hash);
+        })
+    })
+
+    //Decryption
+    bcrypt.compare("123", "$2b$10$jkxcHSqReGfdSt5D7xudHeS52BgZD9C2JxntfagSzcIpkBuosVAKG", function(err, result){
+        console.log("Result:", result);
+    })
+    
+    //JWT
+    let token = jwt.sign({email: "samarth@gmail.com"}, "secret")
+    console.log(token);
+    res.cookie("token",token);
+    
+    res.send("Authentication & Authorization");
+})
+
+app.get("/auth1", function(req, res){
+    console.log(req.cookies);
+    res.send("Done")
+})
 
 app.listen(3000, () => {
     console.log("its running");
