@@ -4,6 +4,7 @@ const fs = require('fs');
 const app = express();
 const userSchema = require('./userModel');
 const userSchema1 = require('./models/user');
+const postSchema = require('./models/post');
 const cookieParser = require('cookie-parser');
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -125,10 +126,10 @@ app.get('/editUser/:id', async function (req, res) {
 });
 
 app.post('/updateUser/:id', async function (req, res) {
-    const { name, email, image } = req.body;    
-    console.log(name,email,image,req.params.id)
+    const { name, email, image } = req.body;
+    console.log(name, email, image, req.params.id)
     await userSchema1.findOneAndUpdate(
-        { _id : req.params.id },
+        { _id: req.params.id },
         {
             name, email, image
         },
@@ -137,31 +138,101 @@ app.post('/updateUser/:id', async function (req, res) {
     res.redirect('/read');
 });
 
-app.get("/auth", function(req, res){
+app.get("/auth", function (req, res) {
     // res.cookie("name","samarth")
     //Encryption
-    bcrypt.genSalt(10, function(err, salt){
-        bcrypt.hash("123", salt, function(err, hash){
-            console.log("hash:",hash);
+    bcrypt.genSalt(10, function (err, salt) {
+        bcrypt.hash("123", salt, function (err, hash) {
+            console.log("hash:", hash);
         })
     })
 
     //Decryption
-    bcrypt.compare("123", "$2b$10$jkxcHSqReGfdSt5D7xudHeS52BgZD9C2JxntfagSzcIpkBuosVAKG", function(err, result){
+    bcrypt.compare("123", "$2b$10$jkxcHSqReGfdSt5D7xudHeS52BgZD9C2JxntfagSzcIpkBuosVAKG", function (err, result) {
         console.log("Result:", result);
     })
-    
+
     //JWT
-    let token = jwt.sign({email: "samarth@gmail.com"}, "secret")
+    let token = jwt.sign({ email: "samarth@gmail.com" }, "secret")
     console.log(token);
-    res.cookie("token",token);
-    
+    res.cookie("token", token);
+
     res.send("Authentication & Authorization");
 })
 
-app.get("/auth1", function(req, res){
+app.get("/auth1", function (req, res) {
     console.log(req.cookies);
     res.send("Done")
+})
+
+app.get("/auth2", function (req, res) {
+    res.render('index2');
+    console.log("cookie", req.cookies)
+})
+
+app.post('/createAuthUser', function (req, res) {
+    let { username, email, password, age } = req.body;
+    bcrypt.genSalt(10, function (err, salt) {
+        bcrypt.hash(password, salt, async function (err, hash) {
+            if (err) return err;
+            else {
+                await userSchema1.create({
+                    username,
+                    email,
+                    password: hash,
+                    age
+                });
+                const token = jwt.sign({ email }, "secret");
+                res.cookie("token", token);
+                res.redirect('/auth2');
+            }
+        })
+    })
+})
+
+app.get('/login', function (req, res) {
+    console.log(req.cookies);
+    res.render("login");
+})
+
+app.post('/loginUser', async function (req, res) {
+    let { username, password } = req.body;
+    let user = await userSchema1.findOne({ username: username })
+    if (!user) return res.send("Something went wrong");
+    bcrypt.compare(password, user.password, function (err, result) {
+        if (result) {
+            const token = jwt.sign({ email: user.email }, "secret");
+            res.cookie("token", token);
+            res.send("Logged In Successfully");
+        }
+        else return res.send("Something went wront")
+    })
+})
+
+app.get('/logout', function (req, res) {
+    res.clearCookie("token");
+    res.redirect('/login');
+})
+
+app.get('/data', async function(req, res){
+    let user = await userSchema1.create({
+        username: "samarth",
+        email: "samarth@gmail.com",
+        age: 21,
+    })
+    res.send(user)
+});
+
+app.get('/post', async function(req, res){
+    let post = await postSchema.create({
+        postdata: "hello this is nodejs",
+        user: "678154cb06116ef3630d217e",        
+    })
+    let user = await userSchema1.findOne({_id: "678154cb06116ef3630d217e"})
+    user.posts.push(post._id);
+    user.save();
+    
+    res.send({user, post})
 })
 
 app.listen(3000, () => {
