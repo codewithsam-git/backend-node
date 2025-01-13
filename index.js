@@ -8,6 +8,7 @@ const postSchema = require('./models/post');
 const cookieParser = require('cookie-parser');
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const post = require('./models/post');
 
 app.set("view engine", "ejs");
 app.use(express.json());
@@ -39,14 +40,14 @@ app.get('/edit/:filename', function (req, res) {
 });
 
 app.post('/edit', function (req, res) {
-    console.log(req.body);
+    // console.log(req.body);
     fs.rename(`./files/${req.body.previous}`, `./files/${req.body.new}`.split(' ').join(''), function (err) {
         res.redirect("/");
     });
 });
 
 app.post('/create', function (req, res) {
-    console.log(req.body);
+    // console.log(req.body);
     fs.writeFile(`./files/${req.body.title.split(' ').join('')}`, req.body.details, function (err) {
         res.redirect('/');
     });
@@ -191,7 +192,7 @@ app.post('/createAuthUser', function (req, res) {
 })
 
 app.get('/login', function (req, res) {
-    console.log(req.cookies);
+    // console.log(req.cookies);
     res.render("login");
 })
 
@@ -214,7 +215,7 @@ app.get('/logout', function (req, res) {
     res.redirect('/login');
 })
 
-app.get('/data', async function(req, res){
+app.get('/data', async function (req, res) {
     let user = await userSchema1.create({
         username: "samarth",
         email: "samarth@gmail.com",
@@ -223,17 +224,126 @@ app.get('/data', async function(req, res){
     res.send(user)
 });
 
-app.get('/post', async function(req, res){
+app.get('/post', async function (req, res) {
     let post = await postSchema.create({
         postdata: "hello this is nodejs",
-        user: "678154cb06116ef3630d217e",        
+        user: "678154cb06116ef3630d217e",
     })
-    let user = await userSchema1.findOne({_id: "678154cb06116ef3630d217e"})
+    let user = await userSchema1.findOne({ _id: "678154cb06116ef3630d217e" })
     user.posts.push(post._id);
     user.save();
-    
-    res.send({user, post})
+
+    res.send({ user, post })
 })
+
+app.get('/auth3', function (req, res) {
+    // console.log(req.cookies)
+    res.render("index3")
+})
+
+app.post('/insertUser', async function (req, res) {
+    let { username, name, email, password, age } = req.body;
+    
+    let user = await userSchema1.findOne({ email: email });
+    if (user) return res.send("Something went wrong");
+    else {
+        bcrypt.genSalt(10, function (err, salt) {
+            bcrypt.hash(password, salt, async function (err, hash) {
+                let user = await userSchema1.create({
+                    username,
+                    name,
+                    email,
+                    password: hash,
+                    age
+                })
+                const token = jwt.sign({ email: email }, "secret");
+                res.cookie("token", token);
+                res.redirect('/auth3');                
+            })
+        })
+    }
+})
+
+app.get('/auth4', function(req, res){
+    res.render('loginUser');
+})
+
+app.post('/fetchUser', async function (req, res) {
+    let { username, password } = req.body;
+    let user = await userSchema1.findOne({ username: username })
+    if (!user) return res.send("Something went wrong");
+    bcrypt.compare(password, user.password, function (err, result) {
+        if (result) {
+            const token = jwt.sign({ email: user.email, userid: user._id }, "secret");
+            res.cookie("token", token);
+            res.redirect("profile");
+        }
+        else return res.send("Something went wront")
+    })
+})
+
+app.get('/profile', isLoggedIn, async function(req, res){
+    // console.log(req.user.email)
+    let user = await userSchema1.findOne({email: req.user.email}).populate('posts')
+    res.render('profile', {users: user})
+})
+
+app.get('/like/:id', isLoggedIn, async function(req, res){
+    let post = await postSchema.findOne({ _id: req.params.id }).populate('user')
+    // console.log(req.user);
+    
+    if(post.likes.indexOf(req.user.userid) == -1){        
+        post.likes.push(req.user.userid);
+    }
+    else{
+        post.likes.splice(post.likes.indexOf(req.user.userid), 1)
+    }
+    
+    await post.save();
+    res.redirect('/profile');
+})
+
+app.get('/editPost/:id', async function (req, res) {
+    let post = await postSchema.findOne({ _id: req.params.id }).populate('user')
+    res.render('editPost', {post: post});
+
+})
+
+app.post('/updatePost/:id', async function(req, res){
+    console.log(req.body)
+    console.log(req.params.id)
+    await postSchema.findOneAndUpdate(
+        { _id: req.params.id },
+        {
+            content : req.body.content
+        },
+        { new: true }
+    )
+    res.redirect('/profile');
+    
+})
+
+app.post('/createPost', isLoggedIn, async function(req, res) {
+    let user = await userSchema1.findOne({email: req.user.email});
+    let post = await postSchema.create({
+        user: user._id,
+        content: req.body.content,        
+    })
+    // console.log("user: ", user);
+    // console.log("post: ", post);
+    user.posts.push(post._id);
+    await user.save();
+    res.redirect('profile')
+})
+
+function isLoggedIn(req, res, next){
+    if(!req.cookies.token) return res.redirect('auth4');
+    else{
+        let data = jwt.verify(req.cookies.token, "secret");
+        req.user = data;      
+        next();  
+    }
+}
 
 app.listen(3000, () => {
     console.log("its running");
