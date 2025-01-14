@@ -11,6 +11,8 @@ const jwt = require("jsonwebtoken");
 const post = require('./models/post');
 const multer = require('multer');
 const crypto = require('crypto');
+const multerconfig = require('./config/multerconfig');
+const user = require('./models/user');
 
 app.set("view engine", "ejs");
 app.use(express.json());
@@ -356,9 +358,11 @@ app.get('/test', function (req, res) {
     res.render('file')
 })
 
-app.post('/uploadFile', upload.single('image'), function (req, res) {
-    console.log(req.file);
-    console.log(req.body);
+app.post('/uploadFile', isLoggedIn, multerconfig.single('image'), async function (req, res) {
+    let user = await userSchema1.findOne({email: req.user.email});
+    user.profilePic = req.file.filename;
+    await user.save(); 
+    res.redirect('profile')
 })
 
 function isLoggedIn(req, res, next) {
