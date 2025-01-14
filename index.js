@@ -9,12 +9,28 @@ const cookieParser = require('cookie-parser');
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const post = require('./models/post');
+const multer = require('multer');
+const crypto = require('crypto');
 
 app.set("view engine", "ejs");
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use(cookieParser()) // use to read cookies on another routes
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, './public/images')
+    },
+    filename: function (req, file, cb) {
+        crypto.randomBytes(12, function (err, bytes) {
+            const fn = bytes.toString("hex") + path.extname(file.originalname);
+            cb(null, fn)
+        })
+    }
+})
+
+const upload = multer({ storage: storage })
 
 app.get('/', function (req, res) {
     // res.send("Running");
@@ -243,7 +259,7 @@ app.get('/auth3', function (req, res) {
 
 app.post('/insertUser', async function (req, res) {
     let { username, name, email, password, age } = req.body;
-    
+
     let user = await userSchema1.findOne({ email: email });
     if (user) return res.send("Something went wrong");
     else {
@@ -258,13 +274,13 @@ app.post('/insertUser', async function (req, res) {
                 })
                 const token = jwt.sign({ email: email }, "secret");
                 res.cookie("token", token);
-                res.redirect('/auth3');                
+                res.redirect('/auth3');
             })
         })
     }
 })
 
-app.get('/auth4', function(req, res){
+app.get('/auth4', function (req, res) {
     res.render('loginUser');
 })
 
@@ -282,52 +298,52 @@ app.post('/fetchUser', async function (req, res) {
     })
 })
 
-app.get('/profile', isLoggedIn, async function(req, res){
+app.get('/profile', isLoggedIn, async function (req, res) {
     // console.log(req.user.email)
-    let user = await userSchema1.findOne({email: req.user.email}).populate('posts')
-    res.render('profile', {users: user})
+    let user = await userSchema1.findOne({ email: req.user.email }).populate('posts')
+    res.render('profile', { users: user })
 })
 
-app.get('/like/:id', isLoggedIn, async function(req, res){
+app.get('/like/:id', isLoggedIn, async function (req, res) {
     let post = await postSchema.findOne({ _id: req.params.id }).populate('user')
     // console.log(req.user);
-    
-    if(post.likes.indexOf(req.user.userid) == -1){        
+
+    if (post.likes.indexOf(req.user.userid) == -1) {
         post.likes.push(req.user.userid);
     }
-    else{
+    else {
         post.likes.splice(post.likes.indexOf(req.user.userid), 1)
     }
-    
+
     await post.save();
     res.redirect('/profile');
 })
 
 app.get('/editPost/:id', async function (req, res) {
     let post = await postSchema.findOne({ _id: req.params.id }).populate('user')
-    res.render('editPost', {post: post});
+    res.render('editPost', { post: post });
 
 })
 
-app.post('/updatePost/:id', async function(req, res){
+app.post('/updatePost/:id', async function (req, res) {
     console.log(req.body)
     console.log(req.params.id)
     await postSchema.findOneAndUpdate(
         { _id: req.params.id },
         {
-            content : req.body.content
+            content: req.body.content
         },
         { new: true }
     )
     res.redirect('/profile');
-    
+
 })
 
-app.post('/createPost', isLoggedIn, async function(req, res) {
-    let user = await userSchema1.findOne({email: req.user.email});
+app.post('/createPost', isLoggedIn, async function (req, res) {
+    let user = await userSchema1.findOne({ email: req.user.email });
     let post = await postSchema.create({
         user: user._id,
-        content: req.body.content,        
+        content: req.body.content,
     })
     // console.log("user: ", user);
     // console.log("post: ", post);
@@ -336,12 +352,21 @@ app.post('/createPost', isLoggedIn, async function(req, res) {
     res.redirect('profile')
 })
 
-function isLoggedIn(req, res, next){
-    if(!req.cookies.token) return res.redirect('auth4');
-    else{
+app.get('/test', function (req, res) {
+    res.render('file')
+})
+
+app.post('/uploadFile', upload.single('image'), function (req, res) {
+    console.log(req.file);
+    console.log(req.body);
+})
+
+function isLoggedIn(req, res, next) {
+    if (!req.cookies.token) return res.redirect('auth4');
+    else {
         let data = jwt.verify(req.cookies.token, "secret");
-        req.user = data;      
-        next();  
+        req.user = data;
+        next();
     }
 }
 
